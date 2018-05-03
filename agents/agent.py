@@ -62,9 +62,19 @@ class Actor:
         states = layers.Input(shape=(self.state_size,), name='states')
 
         # Add hidden layers
-        net = layers.Dense(units=32, activation='relu')(states)
-        net = layers.Dense(units=64, activation='relu')(net)
-        net = layers.Dense(units=32, activation='relu')(net)
+        net = layers.Dense(units=128, use_bias = False, kernel_regularizer = regularizers.l2(0.01), activity_regularizer = regularizers.l1(0.01))(states)
+        net = layers.BatchNormalization()(net)
+        net = layers.Dropout(0.2)(net)
+
+        net = layers.Dense(units=64, use_bias = False, kernel_regularizer = regularizers.l2(0.01), activity_regularizer = regularizers.l1(0.01))(net)
+        net = layers.BatchNormalization()(net)
+        net = layers.Dropout(0.5)(net)
+
+        net = layers.Dense(units=32, use_bias = False, kernel_regularizer = regularizers.l2(0.01), activity_regularizer = regularizers.l1(0.01))(net)
+        net = layers.BatchNormalization()(net)
+        net = layers.Dropout(0.5)(net)
+        net = layers.Activation('relu')(net)
+
 
         # Try different layer sizes, activations, add batch normalization, regularizers, etc.
 
@@ -118,12 +128,24 @@ class Critic:
         actions = layers.Input(shape=(self.action_size,), name='actions')
 
         # Add hidden layer(s) for state pathway
-        net_states = layers.Dense(units=32, activation='relu')(states)
-        net_states = layers.Dense(units=64, activation='relu')(net_states)
+        net_states = layers.Dense(units=128, use_bias = False, kernel_regularizer = regularizers.l2(0.01), activity_regularizer = regularizers.l1(0.01))(states)
+        net_states = layers.BatchNormalization()(net_states)
+        net_states = layers.Dropout(0.2)(net_states)
+
+        net_states = layers.Dense(units=64, use_bias = False, kernel_regularizer = regularizers.l2(0.01), activity_regularizer = regularizers.l1(0.01))(net_states)
+        net_states = layers.BatchNormalization()(net_states)
+        net_states = layers.Dropout(0.2)(net_states)
 
         # Add hidden layer(s) for action pathway
-        net_actions = layers.Dense(units=32, activation='relu')(actions)
-        net_actions = layers.Dense(units=64, activation='relu')(net_actions)
+        net_actions = layers.Dense(units=32, use_bias = False, kernel_regularizer = regularizers.l2(0.01), activity_regularizer = regularizers.l1(0.01))(actions)
+        net_actions = layers.BatchNormalization()(net_states)
+        net_actions = layers.Dropout(0.2)(net_states)
+
+        net_actions = layers.Dense(units=64, use_bias = False, kernel_regularizer = regularizers.l2(0.01), activity_regularizer = regularizers.l1(0.01))(net_actions)
+        net_actions = layers.BatchNormalization()(net_states)
+        net_actions = layers.Dropout(0.1)(net_states)
+
+        net = layers.Activation('relu')(net)
 
         # Try different layer sizes, activations, add batch normalization, regularizers, etc.
 
@@ -150,6 +172,27 @@ class Critic:
         self.get_action_gradients = K.function(
             inputs=[*self.model.input, K.learning_phase()],
             outputs=action_gradients)
+
+class OUNoise:
+    """Ornstein-Uhlenbeck process."""
+
+    def __init__(self, size, mu, theta, sigma):
+        """Initialize parameters and noise process."""
+        self.mu = mu * np.ones(size)
+        self.theta = theta
+        self.sigma = sigma
+        self.reset()
+
+    def reset(self):
+        """Reset the internal state (= noise) to mean (mu)."""
+        self.state = copy.copy(self.mu)
+
+    def sample(self):
+        """Update internal state and return it as a noise sample."""
+        x = self.state
+        dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(len(x))
+        self.state = x + dx
+        return self.state
 
 class DDPG():
     """Reinforcement Learning agent that learns using DDPG."""
@@ -247,23 +290,3 @@ class DDPG():
         new_weights = self.tau * local_weights + (1 - self.tau) * target_weights
         target_model.set_weights(new_weights)
 
-class OUNoise:
-    """Ornstein-Uhlenbeck process."""
-
-    def __init__(self, size, mu, theta, sigma):
-        """Initialize parameters and noise process."""
-        self.mu = mu * np.ones(size)
-        self.theta = theta
-        self.sigma = sigma
-        self.reset()
-
-    def reset(self):
-        """Reset the internal state (= noise) to mean (mu)."""
-        self.state = copy.copy(self.mu)
-
-    def sample(self):
-        """Update internal state and return it as a noise sample."""
-        x = self.state
-        dx = self.theta * (self.mu - x) + self.sigma * np.random.randn(len(x))
-        self.state = x + dx
-        return self.state
